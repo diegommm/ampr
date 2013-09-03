@@ -71,6 +71,7 @@ arguments to 'ip route replace' or 'ip route delete'. So you may specify any arg
 the route in that header, like 'table mytab', 'metric 2'. The only one that cannot be missing is
 the 'to' argument (for obvious reasons). Examples:
 
+
     [default]
     [192.168.2.0/24 scope global src 192.168.1.1 metric 10]
 
