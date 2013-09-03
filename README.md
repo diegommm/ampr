@@ -3,17 +3,16 @@ ampr
 
 Automatic Multi Path Route
 
-====================================================================================================
-===== *0 - Index* ==================================================================================
+1. License and acceptable use
+2. Theory of operation
+3. Configuration file format
+4. Examples
+5. Troubleshooting
 
-1 - License and acceptable use
-2 - Theory of operation
-3 - Configuration file format
-4 - Examples
-5 - Troubleshooting
+----------------------------------------------------------------------------------------------------
 
-====================================================================================================
-===== *1 - Licence and acceptable use* =============================================================
+1. Licence and acceptable use
+=============================
 
 Copyright (C) 2013 Diego Augusto Molina
 
@@ -28,8 +27,8 @@ You should have recieved a copy of the GNU General Public Licence along with thi
 write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
 USA.
 
-====================================================================================================
-===== *2 - Theory of operation* ====================================================================
+2. Theory of operation
+======================
 
 The program relies on specific routes for hosts to determine the availability of a path. If INIT is
 non zero, the program will make these routes for you. Basically what it will do is to create a
@@ -44,26 +43,26 @@ there is no connection available the path will be brought down, without affectin
 and flushing all the routes that were cached through that nextop router. When no path is available,
 the entire route is deleted.
 
-====================================================================================================
-===== *3 - Configuration file format* ==============================================================
+3. Configuration file format
+============================
 
 The file is a regular INI file. The special section [general] serves to declare default values.
 Comments start with a hash sign (#) and occupy the rest of the line. White space is trimmed from
 lines and comments are removed when parsing.
 
 The following are the values that can be declared in the [general] section:
-* NWEIGHT: default weight for normal paths.
-* HLWEIGHT: weight for high latency paths.
-* INIT: wether to initialize the special routes for each remote host behind the nexthop routers (see
-* later). Set to non zero to enable.
-* PINGMONOPTS: default options to pass to 'pingmon' function, which is the function that performs
-* monitoring.
-* REST: sleep for this number of seconds after completion of each group of operations. This value
-  will be passed to 'sleep'.
-* PRETEND: if non zero, will run the whole program but will write to stdout the 'ip' commands
-  instead of actually executing them.
-* TROUBLESHOOT: if non zero, will run interactively and ask where to save a troubleshooting report
-  to attach to a bug report.
+*   NWEIGHT: default weight for normal paths.
+*   HLWEIGHT: weight for high latency paths.
+*   INIT: wether to initialize the special routes for each remote host behind the nexthop routers
+    (see later). Set to non zero to enable.
+*   PINGMONOPTS: default options to pass to 'pingmon' function, which is the function that performs
+    monitoring.
+*   REST: sleep for this number of seconds after completion of each group of operations. This value
+    will be passed to 'sleep'.
+*   PRETEND: if non zero, will run the whole program but will write to stdout the 'ip' commands
+    instead of actually executing them.
+*   TROUBLESHOOT: if non zero, will run interactively and ask where to save a troubleshooting report
+    to attach to a bug report.
 You can declare the [general] section as many times you want: each variable declaration overwrites
 the previous one.
 Any other section will be interpreted as a multipath route definition, and each line of the contents
@@ -71,34 +70,34 @@ of that section a path definition of that multipath route. The header itself ser
 arguments to 'ip route replace' or 'ip route delete'. So you may specify any arguments you want for
 the route in that header, like 'table mytab', 'metric 2'. The only one that cannot be missing is
 the 'to' argument (for obvious reasons). Examples:
-  [default]
-  [192.168.2.0/24 scope global src 192.168.1.1 metric 10]
+    [default]
+    [192.168.2.0/24 scope global src 192.168.1.1 metric 10]
 
 The rest of the arguments to the 'ip' command, namely the nexthops, will be added dynamically when
 they are determined to be available. Each nexthop definition is a white space separated list of
 items in the same line. Each line is supposed to have at least three items. The items will be
 interpreted in the following order:
-1) IP address of the remote host to monitor through this path.
-2) Network interface name.
-3) Nexthop router.
-4) Normal weight and small weight (for high latencies) for this specific path, separated by a comma.
-  If only one value is given it will be interpreted as the normal weight.
-5) The rest of the items will be passed 'as-is' to the 'pingmon' function, so that you can make any
-  particular configuration for a path.
+1.  IP address of the remote host to monitor through this path.
+2.  Network interface name.
+3.  Nexthop router.
+4.  Normal weight and small weight (for high latencies) for this specific path, separated by a
+    comma. If only one value is given it will be interpreted as the normal weight.
+5.  The rest of the items will be passed 'as-is' to the 'pingmon' function, so that you can make any
+    particular configuration for a path.
 Examples:
-  8.8.8.8 eth0 10.0.0.2
-  4.4.4.4 eth1 10.0.0.3 1,2
+    8.8.8.8 eth0 10.0.0.2
+    4.4.4.4 eth1 10.0.0.3 1,2
 
-IMPORTANT NOTE: no validation is done on the arguments passed to the 'ip' command. Correctness
+*IMPORTANT NOTE*: no validation is done on the arguments passed to the 'ip' command. Correctness
 relies entirely on your veification.
 
-====================================================================================================
-===== *4 - Examples* ===============================================================================
+4. Examples
+===========
 
 See the "ampr.ini" file for a comprehensive configuraion example.
 
-====================================================================================================
-===== *5 - Troubleshooting* ========================================================================
+5. Troubleshooting
+==================
 
 Remember that you should first run the program with the "PRETEND=1" option set in your configuration
 file in order to see what would actually be done. The program comes with some safe defaults, but
