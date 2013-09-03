@@ -3,11 +3,11 @@ ampr
 
 Automatic Multi Path Route
 
-1. License and acceptable use
-2. Theory of operation
-3. Configuration file format
-4. Examples
-5. Troubleshooting
+1.  License and acceptable use
+2.  Theory of operation
+3.  Configuration file format
+4.  Examples
+5.  Troubleshooting
 
 ----------------------------------------------------------------------------------------------------
 
