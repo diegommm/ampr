@@ -70,6 +70,7 @@ of that section a path definition of that multipath route. The header itself ser
 arguments to 'ip route replace' or 'ip route delete'. So you may specify any arguments you want for
 the route in that header, like 'table mytab', 'metric 2'. The only one that cannot be missing is
 the 'to' argument (for obvious reasons). Examples:
+
     [default]
     [192.168.2.0/24 scope global src 192.168.1.1 metric 10]
 
@@ -85,6 +86,7 @@ interpreted in the following order:
 5.  The rest of the items will be passed 'as-is' to the 'pingmon' function, so that you can make any
     particular configuration for a path.
 Examples:
+
     8.8.8.8 eth0 10.0.0.2
     4.4.4.4 eth1 10.0.0.3 1,2
 
