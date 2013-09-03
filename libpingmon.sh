@@ -1,86 +1,5 @@
 #!/bin/bash
 
-  ### Primera implementacion: ligeramente mas compleja y sofisticada
-#pingmon(){
-#  local tty=$(tty);
-#  local traps="RETURN SIGTERM SIGKILL SIGINT";
-#  local -i MAXT=200 MAXCT=2;
-#  while sleep 5;
-#  do
-#    echo ================================================== > $tty;
-#  done & 
-#  trap "kill $!; trap - $traps;" $traps;
-#  while sleep 1; do
-#    {
-#      ping www.google.com |
-#        tee -a /proc/self/fd/2 |
-#        sed -un 's/^.*time=\(\S*\)\s.*$/\1/p' |
-#        {
-#          declare -i t ct=0;
-#          while read tiempo; do
-#            t="${tiempo:-0}";
-#            if [ "${tiempo:-}" = "$t" ]; then
-#              if [ $t -gt $MAXT ]; then
-#                let ct=1+${ct};
-#                if [ $ct -gt $MAXCT ]; then
-#                  echo "HOLA" > ${tty}
-#                  return 1;
-#                fi
-#              else
-#                ct=0;
-#              fi;
-#            fi;
-#          done > /dev/null ;
-#        }
-#      if [ $? -ne 0 ];then
-#        return;
-#      fi
-#    } 2>&1
-#  done;
-#}
-
-  ### Segunda impementacion: mas sencilla y segura, aunque menos eficiente
-#pingmon(){
-#  local tty=$(tty);
-#  local traps="RETURN SIGTERM SIGKILL SIGINT";
-#  local -i MAXT=200 MAXCT=2;
-#  while sleep 5;
-#  do
-#    echo ================================================== > $tty;
-#  done & 
-#  trap "kill $!; trap - $traps;" $traps;
-#
-#  while sleep 1;do
-#    ping www.google.com |
-#      {
-#        declare -i t ct=0;
-#        while read tiempo; do
-#          echo "$tiempo";
-#          tiempo="$( echo "$tiempo" | sed -n 's/^.*time=\(\S*\)\s.*$/\1/p' )";
-#          t="$tiempo";
-#          if [ "${tiempo:-}" = "$t" ]; then
-#            if [ $t -gt $MAXT ]; then
-#              let ct=1+${ct};
-#              if [ $ct -gt $MAXCT ]; then
-#                echo "HOLA" > ${tty}
-#                return 1;
-#              fi
-#            else
-#              ct=0;
-#            fi;
-#          fi;
-#        done;
-#      }
-#    if [ $? -ne 0 ]; then
-#      break;
-#    fi
-#  done;
-#}
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
-
 pingmon(){
 
 #
@@ -481,8 +400,4 @@ These are the initial options passed to 'ping': ${REAL_PING_OPTS[*]:-(none set)}
 
   return $RET_OK_WORK;
 };
-
-####################################################################################################
-####################################################################################################
-####################################################################################################
 
