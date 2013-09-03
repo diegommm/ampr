@@ -25,6 +25,7 @@ set -o posix;
 set -u;
 set +H;
 set +e;
+export LC_ALL=C;
 
   # Include the code of the "pingmon" function. Would be fatal if couldn't
 set -e;
@@ -33,11 +34,11 @@ set +e;
 
 ##### Declarations #################################################################################
 
-declare -ar VARS_OVERWRITE=( NWEIGHT SWEIGHT INIT PINGMON_OPTS REST PRETEND );
+declare -ar VARS_OVERWRITE=( NWEIGHT SWEIGHT INIT PINGMON_OPTS REST PRETEND TROUBLESHOOT );
 declare -a line ROUTES ROUTE_PATHS PATHS;
-declare -i r=-1 p=-1 in_def_head=0 INIT=1 NWEIGHT=5 SWEIGHT=3 PRETEND=0;
-declare v AMPR_REPLY CONFIG_FILE REST=1;
-declare PINGMON_OPTS="-C 5 -F 1 -k 2 -K 2 -q 0 -U 10 -x 120 -X 6" PIDS="";
+declare -i r=-1 p=-1 in_def_head=0 INIT=1 NWEIGHT=5 SWEIGHT=3 PRETEND=0 TROUBLESHOOT=0;
+declare v x AMPR_REPLY CONFIG_FILE REST=1;
+declare PINGMON_OPTS="-q 0";
 declare -r AMPR_TRAPS="RETURN SIGTERM SIGINT SIGHUP";
 
 ##### Functions ####################################################################################
@@ -66,7 +67,7 @@ Usage:
   3) Only execute the 'pingmon' function (with no extra arguments will give you help):
     ${0} pingmon [pingmon args]
 
-This program must be run as root.
+This program must be run as root to actually perform any change to the routing tables.
 
 What does the program do:
   The program relies on specific routes for hosts to determine the availability of a path. If
@@ -101,6 +102,8 @@ Configuration file format:
     will be passed to 'sleep'. The default value of this configuration is '$REST'.
   * PRETEND: if non zero, will run the whole program but will write to stdout the 'ip' commands
     instead of actually executing them. The default value of this configuration is '$PRETEND'.
+  * TROUBLESHOOT: if non zero, will run interactively and ask where to save a troubleshooting report
+    to attach to a bug report.
   You can declare the [general] section as many times you want: each variable declaration
   overwrites the previous one.
   Any other section will be interpreted as a multipath route definition, and each line of the
@@ -155,10 +158,6 @@ if [ $# -ne 1 ]; then
 elif [ ! -r "$1" ] || [ ! -f "$1" ]; then
   echo "ERROR: can't open regular file '$1' for reading." >&2;
   hlp;
-
-elif [ $EUID -ne 0 ]; then
-  echo "ERROR: not running as root." >&2;
-  hlp;
 fi;
 
 readonly CONFIG_FILE="$1";
@@ -208,15 +207,46 @@ done <<< "$(
   sed '/^\s*\(#.*\)*$/d; s/^\s*//g' "${CONFIG_FILE}"
 )";
 
-if [ $PRETEND -ne 0 ]; then
-  alias ip='echo ip';
-fi;
-
   # Protect variables in this context. Two things are infinite...
 readonly ROUTES ROUTE_PATHS PATHS PINGMON_OPTS NWEIGHT SWEIGHT INIT REST;
 
-##### Initialize routes for the paths ##############################################################
+##### Execute action: troubleshoot #################################################################
 
+if [ $TROUBLESHOOT -ne 0 ]; then
+  read -p "Please, enter the name of the file where to save troubleshooting information: " x;
+  set -e;
+  trap "echo \"Error: cannot open file '$x' for writing.\" >&2;" ERR;
+  ( echo -n "" > "$x"; ) &> /dev/null;
+  set +e;
+  trap - ERR;
+  echo "Generating troubleshooting report file. Please, stand by...";
+  for v in "ping -V" "ping --version" "ping -c 3 127.0.0.1" "type sleep" "sleep --version" "ip -V";
+  do
+    echo "########## $v ##########" >> "$x";
+    $v >> "$x" 2>&1;
+  done;
+  for v in /etc/*release* "$CONFIG_FILE"; do
+    echo "########## ${v} ##########" >> "$x";
+    cat "$v" >> "$x";
+  done;
+  echo "Troubleshooting report file ready. Please, attach it to your bug report and send it to" \
+    "diegoaugustomolina (at) gmail (dot) com with a suubject begginning with '[ampr].'";
+  exit 0;
+fi;
+
+##### Execute action: AMPR #########################################################################
+export TTY=$(tty);
+  # Shall we pretend?
+if [ $PRETEND -ne 0 ]; then
+  alias ip='echo ip';
+
+elif [ $EUID -ne 0 ]; then
+  echo "ERROR: not running as root." >&2;
+  hlp;
+fi;
+
+
+  # Initialize routes for the paths
 if [ $INIT -ne 0 ]; then
   for v in "${PATHS[@]}"; do
     line=( $v );
@@ -224,8 +254,10 @@ if [ $INIT -ne 0 ]; then
   done;
 fi;
 
-##### Execute the actions ##########################################################################
+  # Trap signals and kill all processes in the same process group. FIXME: how portable is this?
+trap 'kill -9 0;' $AMPR_TRAPS;
 
+  # Execute de main program
 for r in "${!ROUTE_PATHS[@]}"; do
   if [ -z "${r:-}" ]; then
     continue;
@@ -256,11 +288,6 @@ for r in "${!ROUTE_PATHS[@]}"; do
         esac;
       done;
     } &
-    PIDS="$PIDS $!";
-
-      # Make sure we kill every process we started
-    trap - $AMPR_TRAPS;
-    trap "kill $PIDS &" $AMPR_TRAPS;
 
   done;
 done | {

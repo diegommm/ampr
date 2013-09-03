@@ -106,11 +106,12 @@ pingmon(){
   set -u;
   set +H;
   set +e;
+  export LC_ALL=C;
 
     ## Aux vars
   local -r SIG_KEEP_ALIVE="### SIGNAL: KEEP ALIVE ###";
   local -r SIG_PING_FAILED="### SIGNAL: PING FAILED ###";
-  local -r PINGMON_TRAPS="RETURN SIGTERM SIGINT SIGHUP";
+  local -r PINGMON_TRAPS="RETURN SIGTERM SIGINT SIGHUP EXIT";
   local -ar PING_OPTS_WO_ARGS=( A b B d n D U v ) PING_OPTS_W_ARGS=( m c i I l p Q s S t T M w W );
   local i=0;
   local -i retval=0;
@@ -118,7 +119,7 @@ pingmon(){
 
     ## Default values
   local KEEP_ALIVE_TIME=3 REMOTE_HOST="";
-  local -i PING_TIME_TRESHOLD=500 MAX_PING_TIME_COUNT=3 MAX_KEEP_ALIVE=3 MAX_UNSEQUENCED=10;
+  local -i PING_TIME_TRESHOLD=500 MAX_PING_TIME_COUNT=6 MAX_KEEP_ALIVE=3 MAX_UNSEQUENCED=10;
   local -i MAX_ICMP_FAIL=0 ACC_MIN_COUNT=5 QUIT_ON_ERROR=1 DRY_RUN=0;
   local -a REAL_PING_OPTS=();
 
@@ -325,7 +326,10 @@ These are the initial options passed to 'ping': ${REAL_PING_OPTS[*]:-(none set)}
   fi;
 
 ##### Main program #################################################################################
-declare tty=$(tty);
+
+    # Trap signals and kill background processes
+  trap "kill -9 0;" $PINGMON_TRAPS;
+
     ## Work!
   while sleep 1; do
     {
@@ -333,141 +337,140 @@ declare tty=$(tty);
         while sleep "$KEEP_ALIVE_TIME"; do
           echo "$SIG_KEEP_ALIVE";
         done & 
-        trap "kill -9 $! &" $PINGMON_TRAPS;
       fi;
 
       if [ ${#REAL_PING_OPTS[@]} -gt 0 ]; then
-        LC_ALL=C ping "${REAL_PING_OPTS[@]}" "$REMOTE_HOST"
+        ping "${REAL_PING_OPTS[@]}" "$REMOTE_HOST"
       else
-        LC_ALL=C ping "$REMOTE_HOST"
+        ping "$REMOTE_HOST"
       fi 2> /dev/null ||
         echo "$SIG_PING_FAILED";
 
       return $RET_OK_KEEP_GOING;
-    } |
-      {
-        declare -i ping_time ping_time_count=0 keep_alive_count=0 req=-1 last_req=0 req_count=0;
-        declare -i icmp_fail_count=0 acc_count=0 acc_status=0;
-        declare aux="" PINGMON_REPLY="";
+    } | {
+      declare -i ping_time ping_time_count=0 keep_alive_count=0 req=-1 last_req=0 req_count=0;
+      declare -i icmp_fail_count=0 acc_count=0 acc_status=0;
+      declare aux="" PINGMON_REPLY="";
 
-        while read PINGMON_REPLY; do
+      while read PINGMON_REPLY; do
 
-            # Ping failed
-          if [ "$PINGMON_REPLY" = "$SIG_PING_FAILED" ]; then
-            echo "### ERROR #1 Ping failed." >&2;
-            acc_count=0;
-            if [ $QUIT_ON_ERROR -ne 0 ]; then
-              return 1;
-            fi;
+          # Ping failed
+        if [ "$PINGMON_REPLY" = "$SIG_PING_FAILED" ]; then
+          echo "### ERROR #1 Ping failed." >&2;
+          acc_count=0;
+          if [ $QUIT_ON_ERROR -ne 0 ]; then
+            return 1;
           fi;
+        fi;
 
-            # Keep alive
-          if [ $MAX_KEEP_ALIVE -gt 0 ]; then
-            if [ "$PINGMON_REPLY" = "$SIG_KEEP_ALIVE" ]; then
-              let keep_alive_count=1+$keep_alive_count;
-              if [ $keep_alive_count -eq $(( $MAX_KEEP_ALIVE + 1 )) ]; then
-                echo "### ERROR #2 Keep-alives exceeded maximum of $MAX_KEEP_ALIVE." >&2;
-                acc_count=0;
-                if [ $QUIT_ON_ERROR -ne 0 ]; then
-                  return 2;
-                fi;
-              fi;
-              continue;
-            fi;
-          fi;
-
-            # No signals caught so far? Then print the line, for it is actual part of ping's output
-          echo "$PINGMON_REPLY";
-
-            # Initialization
-          acc_status=-1;
-          keep_alive_count=0;
-
-            # Ping time treshold
-          if [ $MAX_PING_TIME_COUNT -ge 0 ]; then
-            aux="$( echo "$PINGMON_REPLY" | sed -n 's/^.*time=\([[:digit:]]*\)[^[:digit:]].*$/\1/p' )";
-            ping_time="$aux";
-            if [ "$aux" = "$ping_time" ]; then
-              if [ $acc_status -eq -1 ]; then
-                acc_status=1;
-              fi;
-              if [ $ping_time -gt $PING_TIME_TRESHOLD ]; then
-                acc_status=0;
-                let ping_time_count=1+$ping_time_count;
-                if [ $ping_time_count -eq $(( $MAX_PING_TIME_COUNT + 1 )) ]; then
-                  echo -n "### ERROR #3 Amount of consecutive pings with higher time than " >&2;
-                  echo -n "treshold of ${PING_TIME_TRESHOLD}ms exceeded maximum of " >&2;
-                  echo "$MAX_PING_TIME_COUNT." >&2;
-                  acc_count=0;
-                  if [ $QUIT_ON_ERROR -ne 0 ]; then
-                    return 3;
-                  fi;
-                fi;
-              else
-                ping_time_count=0;
+          # Keep alive
+        if [ $MAX_KEEP_ALIVE -gt 0 ]; then
+          if [ "$PINGMON_REPLY" = "$SIG_KEEP_ALIVE" ]; then
+            let keep_alive_count=1+$keep_alive_count;
+            if [ $keep_alive_count -eq $(( $MAX_KEEP_ALIVE + 1 )) ]; then
+              echo "### ERROR #2 Keep-alives exceeded maximum of $MAX_KEEP_ALIVE." >&2;
+              acc_count=0;
+              if [ $QUIT_ON_ERROR -ne 0 ]; then
+                return 2;
               fi;
             fi;
+            continue;
           fi;
+        fi;
 
-            # Ping sequence number
-          if [ $MAX_UNSEQUENCED -ge 0 ]; then
-            aux="$( echo "$PINGMON_REPLY" | sed -n 's/^.*icmp_req=\([[:digit:]]*\)[^[:digit:]].*$/\1/p' )";
-            req="$aux";
-            if [ "$aux" = "$req" ]; then
-              if [ $acc_status -eq -1 ]; then
-                acc_status=1;
-              fi;
-              if [ $req -ne $(( $last_req + 1 )) ]; then
-                acc_status=0;
-                let req_count=1+$req_count;
-                if [ $req_count -eq $(( $MAX_UNSEQUENCED + 1 )) ]; then
-                  echo -n "### ERROR #4 Amount of out of sequence consecutive pings exceeded " >&2;
-                  echo maximum of "$MAX_UNSEQUENCED." >&2;
-                  acc_count=0;
-                  if [ $QUIT_ON_ERROR -ne 0 ]; then
-                    return 4;
-                  fi;
-                fi;
-              else
-                req_count=0;
-              fi;
-              last_req=$req;
+          # No signals caught so far? Then print the line, for it is actual part of ping's output
+        echo "$PINGMON_REPLY";
+
+          # Initialization
+        acc_status=-1;
+        keep_alive_count=0;
+
+          # Ping time treshold
+        if [ $MAX_PING_TIME_COUNT -ge 0 ]; then
+          aux="$( echo "$PINGMON_REPLY" | sed -n 's/^.*time=\([[:digit:]]*\)[^[:digit:]].*$/\1/p' )";
+          ping_time="$aux";
+          if [ "$aux" = "$ping_time" ]; then
+            if [ $acc_status -eq -1 ]; then
+              acc_status=1;
             fi;
-          fi;
-
-            # ICMP fail count
-          if [ $MAX_ICMP_FAIL -ge 0 ]; then
-            if echo "$PINGMON_REPLY" | grep -q "icmp_seq="; then
+            if [ $ping_time -gt $PING_TIME_TRESHOLD ]; then
               acc_status=0;
-              let icmp_fail_count=1+$icmp_fail_count;
-              if [ $icmp_fail_count -eq $(( $MAX_ICMP_FAIL + 1 )) ]; then
-                echo -n "### ERROR #5 Amount of consecutive non successful ICMP replies" >&2;
-                echo " recieved exceeded maximum of $MAX_ICMP_FAIL." >&2;
+              let ping_time_count=1+$ping_time_count;
+              if [ $ping_time_count -eq $(( $MAX_PING_TIME_COUNT + 1 )) ]; then
+                echo -n "### ERROR #3 Amount of consecutive pings with higher time than " >&2;
+                echo -n "treshold of ${PING_TIME_TRESHOLD}ms exceeded maximum of " >&2;
+                echo "$MAX_PING_TIME_COUNT." >&2;
                 acc_count=0;
                 if [ $QUIT_ON_ERROR -ne 0 ]; then
-                  return 5;
+                  return 3;
                 fi;
               fi;
+            else
+              ping_time_count=0;
             fi;
           fi;
+        fi;
 
-            # Acceptable connection
-          if [ $ACC_MIN_COUNT -gt 0 ]; then
-            if [ $acc_status -eq 1 ]; then
-              let acc_count=1+$acc_count;
-              if [ $acc_count -eq $ACC_MIN_COUNT ]; then
-                echo "### ERROR #0 Acceptable connection" >&2;
-                  # Reset error counters
-                keep_alive_count=0;
-                ping_time_count=0;
-                req_count=0;
-                icmp_fail_count=0;
+          # Ping sequence number
+        if [ $MAX_UNSEQUENCED -ge 0 ]; then
+          aux="$( echo "$PINGMON_REPLY" | sed -n 's/^.*icmp_[sr]eq=\([[:digit:]]*\)[^[:digit:]].*$/\1/p' )";
+          req="$aux";
+          if [ "$aux" = "$req" ]; then
+            if [ $acc_status -eq -1 ]; then
+              acc_status=1;
+            fi;
+            if [ $req -ne $(( $last_req + 1 )) ]; then
+              acc_status=0;
+              let req_count=1+$req_count;
+              if [ $req_count -eq $(( $MAX_UNSEQUENCED + 1 )) ]; then
+                echo -n "### ERROR #4 Amount of out of sequence consecutive pings exceeded " >&2;
+                echo maximum of "$MAX_UNSEQUENCED." >&2;
+                acc_count=0;
+                if [ $QUIT_ON_ERROR -ne 0 ]; then
+                  return 4;
+                fi;
+              fi;
+            else
+              req_count=0;
+            fi;
+            last_req=$req;
+          fi;
+        fi;
+
+          # ICMP fail count
+        if [ $MAX_ICMP_FAIL -ge 0 ]; then
+          if echo "$PINGMON_REPLY" |
+          grep -iqE "unreach|unknown|failed|isolated|prhibit|filtered|violation|cutoff|frag needed"; then
+            acc_status=0;
+            let icmp_fail_count=1+$icmp_fail_count;
+            if [ $icmp_fail_count -eq $(( $MAX_ICMP_FAIL + 1 )) ]; then
+              echo -n "### ERROR #5 Amount of consecutive non successful ICMP replies" >&2;
+              echo " recieved exceeded maximum of $MAX_ICMP_FAIL." >&2;
+              acc_count=0;
+              if [ $QUIT_ON_ERROR -ne 0 ]; then
+                return 5;
               fi;
             fi;
           fi;
+        fi;
 
-        done;
-      };
+          # Acceptable connection
+        if [ $ACC_MIN_COUNT -gt 0 ]; then
+          if [ $acc_status -eq 1 ]; then
+            let acc_count=1+$acc_count;
+            if [ $acc_count -eq $ACC_MIN_COUNT ]; then
+              echo "### ERROR #0 Acceptable connection" >&2;
+                # Reset error counters
+              keep_alive_count=0;
+              ping_time_count=0;
+              req_count=0;
+              icmp_fail_count=0;
+            fi;
+          fi;
+        fi;
+
+      done;
+    };
     retval=$?;
 
     if [ $retval -ne $RET_OK_KEEP_GOING ]; then
