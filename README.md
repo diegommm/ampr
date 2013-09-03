@@ -63,6 +63,7 @@ The following are the values that can be declared in the [general] section:
     instead of actually executing them.
 *   TROUBLESHOOT: if non zero, will run interactively and ask where to save a troubleshooting report
     to attach to a bug report.
+
 You can declare the [general] section as many times you want: each variable declaration overwrites
 the previous one.
 Any other section will be interpreted as a multipath route definition, and each line of the contents
@@ -71,7 +72,6 @@ arguments to 'ip route replace' or 'ip route delete'. So you may specify any arg
 the route in that header, like 'table mytab', 'metric 2'. The only one that cannot be missing is
 the 'to' argument (for obvious reasons). Examples:
 
-
     [default]
     [192.168.2.0/24 scope global src 192.168.1.1 metric 10]
 
@@ -79,6 +79,7 @@ The rest of the arguments to the 'ip' command, namely the nexthops, will be adde
 they are determined to be available. Each nexthop definition is a white space separated list of
 items in the same line. Each line is supposed to have at least three items. The items will be
 interpreted in the following order:
+
 1.  IP address of the remote host to monitor through this path.
 2.  Network interface name.
 3.  Nexthop router.
@@ -86,6 +87,7 @@ interpreted in the following order:
     comma. If only one value is given it will be interpreted as the normal weight.
 5.  The rest of the items will be passed 'as-is' to the 'pingmon' function, so that you can make any
     particular configuration for a path.
+
 Examples:
 
     8.8.8.8 eth0 10.0.0.2
