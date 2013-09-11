@@ -34,10 +34,10 @@ set +e;
 
 ##### Declarations #################################################################################
 
-declare -ar VARS_OVERWRITE=( NWEIGHT HLWEIGHT INIT PINGMONOPTS REST PRETEND TROUBLESHOOT );
+declare -ar VARS_OVERWRITE=( NWEIGHT HLWEIGHT INIT PINGMONOPTS REST PRETEND TROUBLESHOOT LOGFILE );
 declare -a line ROUTES ROUTE_PATHS PATHS;
 declare -i r=-1 p=-1 in_def_head=0 INIT=1 NWEIGHT=5 HLWEIGHT=3 PRETEND=0 TROUBLESHOOT=0;
-declare v x AMPR_REPLY CONFIG_FILE REST=1;
+declare v x AMPR_REPLY CONFIG_FILE REST=1 LOGFILE="/var/log/ampr.log";
 declare PINGMONOPTS="-q 0";
 declare -r AMPR_TRAPS="RETURN SIGTERM SIGINT SIGHUP";
 
@@ -73,12 +73,26 @@ Current defaults:
   * NWEIGHT=$NWEIGHT
   * HLWEIGHT=$HLWEIGHT
   * INIT=$INIT
-  * PINGMONOPTS=${PINGMONOPTS}
+  * PINGMONOPTS=$PINGMONOPTS
   * REST=$REST
   * PRETEND=$PRETEND
   * TROUBLESHOOT=$TROUBLESHOOT
+  * LOGFILE=$LOGFILE
 " >&2;
   exit 0;
+};
+
+log(){
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*";
+};
+
+ip(){
+  if [ $PRETEND -eq 0 ]; then
+    log "EXECUTING: ip $*";
+    "$(which ip)" "$@";
+  else
+    log "WOULD EXECUTE: ip $*";
+  fi;
 };
 
 ##### Parse command line arguments #################################################################
@@ -161,7 +175,7 @@ readonly ROUTES ROUTE_PATHS PATHS PINGMONOPTS NWEIGHT HLWEIGHT INIT REST;
 if [ $TROUBLESHOOT -ne 0 ]; then
   read -p "Please, enter the name of the file where to save troubleshooting information: " x;
   set -e;
-  trap "echo \"Error: cannot open file '$x' for writing.\" >&2;" ERR;
+  trap "echo \"Error: cannot open file '$x' for writing.\" >&2;exit 1;" ERR;
   ( echo -n "" > "$x"; ) &> /dev/null;
   set +e;
   trap - ERR;
@@ -181,16 +195,22 @@ if [ $TROUBLESHOOT -ne 0 ]; then
 fi;
 
 ##### Execute action: AMPR #########################################################################
-export TTY=$(tty);
-  # Shall we pretend?
-if [ $PRETEND -ne 0 ]; then
-  alias ip='echo ip';
 
-elif [ $EUID -ne 0 ]; then
-  echo "ERROR: not running as root." >&2;
-  hlp;
+  # Log if not pretending
+if [ $PRETEND -eq 0 ]; then
+  if [ $EUID -ne 0 ]; then
+    echo "ERROR: not running as root." >&2;
+    hlp;
+  fi;
+
+  trap "echo \"Error: cannot open file '$LOGFILE' for writing.\" >&2;exit 1;" ERR;
+  set -e;
+  log "Starting AMPR with PID $$" >> "$LOGFILE";
+  set +e;
+  trap - ERR;
+  exec 1>> "$LOGFILE";
+  exec 2>> "$LOGFILE";
 fi;
-
 
   # Initialize routes for the paths
 if [ $INIT -ne 0 ]; then
@@ -201,9 +221,9 @@ if [ $INIT -ne 0 ]; then
 fi;
 
   # Trap signals and kill all processes in the same process group. FIXME: how portable is this?
-trap 'kill -9 0;' $AMPR_TRAPS;
+trap "log \"AMPR with PID $$ is now quitting.\";kill -9 0;" $AMPR_TRAPS;
 
-  # Execute de main program
+  # Execute the main program
 for r in "${!ROUTE_PATHS[@]}"; do
   if [ -z "${r:-}" ]; then
     continue;
@@ -243,9 +263,7 @@ done | {
 
   while read AMPR_REPLY; do
 
-    if [ $PRETEND -ne 0 ]; then
-      echo -e "\n*** EVENT TRIGGERED: $AMPR_REPLY";
-    fi;
+    log "EVENT TRIGGERED: $AMPR_REPLY";
 
     reply=( $AMPR_REPLY );
     case "${reply[0]}" in
@@ -253,9 +271,7 @@ done | {
           ## If this connection has already failed (probably with another error) skip the signal.
           # Another posibility is that it is the first time and 'paths' is still empty
         if [ -z "${paths[${reply[2]}]:-}" ]; then
-          if [ $PRETEND -ne 0 ]; then
-            echo "(SKIPPED)";
-          fi;
+          log "EVENT SKIPPED: $AMPR_REPLY";
           continue;
         fi;
         unset paths[${reply[2]}];
@@ -297,7 +313,7 @@ done | {
         if [ $r -gt 1 ]; then
           v="$v nexthop";
         fi;
-        v="$v dev ${line[1]} via ${line[2]} weight ${line[3]}";
+        v="$v via ${line[2]} dev ${line[1]} weight ${line[3]}";
       fi;
     done;
 
@@ -306,7 +322,7 @@ done | {
       ip route replace ${ROUTES[${reply[1]}]} nexthop $v;
 
     elif [ $r -gt 0 ]; then
-      ip route replace ${ROUTES[${reply[1]}]} $v;
+      ip route replace ${ROUTES[${reply[1]}]} ${v%%weight*};
 
     else
       ip route delete ${ROUTES[${reply[1]}]};

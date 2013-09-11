@@ -61,6 +61,8 @@ The following are the values that can be declared in the [general] section:
     will be passed to 'sleep'.
 *   PRETEND: if non zero, will run the whole program but will write to stdout the 'ip' commands
     instead of actually executing them.
+*   LOGFILE: if PRETEND is zero, file to log what otherwise would be printed to stdout. Note that
+    you'll need a log rotation program, which should kill ampr and restart it after log rotation.
 *   TROUBLESHOOT: if non zero, will run interactively and ask where to save a troubleshooting report
     to attach to a bug report.
 
@@ -73,7 +75,9 @@ the route in that header, like 'table mytab', 'metric 2'. The only one that cann
 the 'to' argument (for obvious reasons). Examples:
 
     [default]
+    # Definition of paths
     [192.168.2.0/24 scope global src 192.168.1.1 metric 10]
+    # Definition of paths
 
 The rest of the arguments to the 'ip' command, namely the nexthops, will be added dynamically when
 they are determined to be available. Each nexthop definition is a white space separated list of
@@ -99,7 +103,7 @@ relies entirely on your veification.
 4. Examples
 ===========
 
-See the "ampr.ini" file for a comprehensive configuraion example.
+See the "ampr.ini" file for a comprehensive configuration example.
 
 5. Troubleshooting
 ==================
@@ -122,5 +126,5 @@ preserve your privacy. I'm personally not interested in that boring information,
 save it from other viewers. But REMEMBER to mask the actual characters of the play in such a fashion
 that the actual scenario can be reproduced. Otherwise you may not get the help you need.  If you do
 care about your organization's privacy, remember to review and edit the troubleshooting file report
-before sending it. The most important thing it has is the configuration file you provided ampr.
+before sending it. The most important thing it has is the configuration file you provided to ampr.
 
