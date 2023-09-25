@@ -1,5 +1,5 @@
-ampr
-====
+[codegolf] ampr
+===============
 
 Automatic Multi Path Route
 
